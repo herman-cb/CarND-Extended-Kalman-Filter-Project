@@ -29,8 +29,10 @@ VectorXd Tools::CalculateRMSE(const vector<VectorXd> &estimations,
 
   //accumulate squared residuals
   for(int i=0; i < estimations.size(); ++i){
+      // cout << "estimations : " << estimations[i] <<
+      //         ", ground truth : " << ground_truth[i] << endl;
       rmse = rmse.array() + (estimations[i]-ground_truth[i]).array() * (estimations[i]-ground_truth[i]).array();
-	
+
   }
 
   //calculate the mean
@@ -42,6 +44,7 @@ VectorXd Tools::CalculateRMSE(const vector<VectorXd> &estimations,
   rmse  = rmse.array().sqrt();
 
   //return the result
+  // cout << "rmse : " << rmse << ", estimations.size() : " << estimations.size()<< endl;
   return rmse;
 }
 
@@ -64,7 +67,7 @@ MatrixXd Tools::CalculateJacobian(const VectorXd& x_state) {
 
 	//check division by zero
 	if(fabs(c1) < 0.0001){
-		cout << "CalculateJacobian () - Error - Division by Zero" << endl;
+		cout << "(tools.cpp) CalculateJacobian () - Error - Division by Zero" << endl;
 		return Hj;
 	}
 

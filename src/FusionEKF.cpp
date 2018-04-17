@@ -39,6 +39,21 @@ FusionEKF::FusionEKF() {
   H_laser_ << 1, 0, 0, 0,
               0, 1, 0, 0;
 
+  Hj_ << 1, 1, 0, 0,
+         1, 1, 0, 0,
+         1, 1, 1, 1;
+
+  ekf_.F_ = MatrixXd(4, 4);
+  ekf_.F_ << 1, 0, 1, 0,
+            0, 1, 0, 1,
+            0, 0, 1, 0,
+            0, 0, 0, 1;
+
+  ekf_.P_ = MatrixXd(4, 4);
+  ekf_.P_ <<  1, 0, 0, 0,
+              0, 1, 0, 0,
+              0, 0, 1000, 0,
+              0, 0, 0, 1000;
 }
 
 /**
@@ -60,7 +75,6 @@ void FusionEKF::ProcessMeasurement(const MeasurementPackage &measurement_pack) {
       * Remember: you'll need to convert radar from polar to cartesian coordinates.
     */
     // first measurement
-    cout << "EKF: " << endl;
     ekf_.x_ = VectorXd(4);
     ekf_.x_ << 1, 1, 1, 1;
 
@@ -78,24 +92,17 @@ void FusionEKF::ProcessMeasurement(const MeasurementPackage &measurement_pack) {
       Initialize state.
       */
       ekf_.x_(0) = measurement_pack.raw_measurements_(0);
-      ekf_.x_(0) = measurement_pack.raw_measurements_(1);
-      ekf_.x_(1) = 0;
-      ekf_.x_(1) = 0;
+      ekf_.x_(1) = measurement_pack.raw_measurements_(1);
+      ekf_.x_(2) = 0;
+      ekf_.x_(3) = 0;
     }
 
-    ekf_.P_ = MatrixXd(4, 4);
-    ekf_.P_ << 1000, 0, 0, 0,
-                0, 1000, 0, 0,
-                0, 0, 1000, 0,
-                0, 0, 0, 1000;
     previous_timestamp_ = measurement_pack.timestamp_;
 
     // done initializing, no need to predict or update
     is_initialized_ = true;
     return;
   }
-
-  cout << "** EKF: " << endl;
 
   /*****************************************************************************
    *  Prediction
@@ -109,7 +116,10 @@ void FusionEKF::ProcessMeasurement(const MeasurementPackage &measurement_pack) {
      * Use noise_ax = 9 and noise_ay = 9 for your Q matrix.
    */
   float dt = (measurement_pack.timestamp_ - previous_timestamp_) / 1000000.0;
-  ekf_.F_ = MatrixXd(4, 4);
+  previous_timestamp_ = measurement_pack.timestamp_;
+
+  cout << "(FusionEKF.cpp) dt = " << dt << endl;
+
   ekf_.F_ << 1, 0, dt, 0,
             0, 1, 0, dt,
             0, 0, 1, 0,
@@ -120,14 +130,19 @@ void FusionEKF::ProcessMeasurement(const MeasurementPackage &measurement_pack) {
   float dt_3 = dt_2 * dt;
   float dt_4 = dt_3 * dt;
 
+  ekf_.F_(0, 2) = dt;
+  ekf_.F_(1, 3) = dt;
+
   ekf_.Q_ = MatrixXd(4, 4);
-  ekf_.Q_ <<  dt_4/4*noise_ax, 0, dt_3/2*noise_ax, 0,
-              0, dt_4/4*noise_ay, 0, dt_3/2*noise_ay,
-              dt_3/2*noise_ax, 0, dt_2*noise_ax, 0,
-              0, dt_3/2*noise_ay, 0, dt_2*noise_ay;
-  
+  ekf_.Q_ <<  dt_4 / 4 * noise_ax, 0, dt_3 / 2 * noise_ax, 0,
+              0, dt_4 / 4 * noise_ay, 0, dt_3 / 2 * noise_ay,
+              dt_3 / 2 * noise_ax, 0, dt_2 * noise_ax, 0,
+              0, dt_3 / 2 * noise_ay, 0, dt_2 * noise_ay;
+
 
   ekf_.Predict();
+  cout << "(FusionEKF.cpp) After predict: x_ = " << endl << ekf_.x_ << endl;
+  cout << "(FusionEKF.cpp) After predict: P_ = " << endl << ekf_.P_ << endl;
 
   /*****************************************************************************
    *  Update
@@ -139,14 +154,17 @@ void FusionEKF::ProcessMeasurement(const MeasurementPackage &measurement_pack) {
      * Update the state and covariance matrices.
    */
 
-  Hj_ = tools.CalculateJacobian(ekf_.x_);
   //ekf_.H_ = Hj_;
 
   if (measurement_pack.sensor_type_ == MeasurementPackage::RADAR) {
     // Radar updates
-    ekf_.Init(ekf_.x_, ekf_.P_, ekf_.F_,
-            Hj_, R_radar_, ekf_.Q_);
+    Hj_ = tools.CalculateJacobian(ekf_.x_);
+    ekf_.Init(ekf_.x_, ekf_.P_, ekf_.F_, Hj_, R_radar_, ekf_.Q_);
+    //ekf_.H_ = Hj_;
+    //ekf_.R_ = R_radar_;
     ekf_.UpdateEKF(measurement_pack.raw_measurements_);
+    //ekf_.x_(2) /= dt;
+    //ekf_.x_(3) /= dt;
 
   } else {
     // Laser updates
@@ -156,6 +174,6 @@ void FusionEKF::ProcessMeasurement(const MeasurementPackage &measurement_pack) {
   }
 
   // print the output
-  cout << "x_ = " << ekf_.x_ << endl;
-  cout << "P_ = " << ekf_.P_ << endl;
+  cout << "(FusionEKF.cpp) After update: x_ = " << endl << ekf_.x_ << endl;
+  cout << "(FusionEKF.cpp) After update: P_ = " << endl << ekf_.P_ << endl;
 }
